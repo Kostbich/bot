@@ -45,6 +45,10 @@ LANDINGS = {
     },
 }
 
+# ========== FLASK ПРИЛОЖЕНИЕ (СОЗДАЁМ РАНЬШЕ ВСЕГО) ==========
+app = Flask(__name__)
+CORS(app)  # Разрешаем запросы с любых доменов
+
 # ========== РАБОТА С ПОДПИСЧИКАМИ ==========
 def load_subscribers():
     if os.path.exists(SUBSCRIBERS_FILE):
@@ -284,7 +288,7 @@ def index():
         "subscribers": len(load_subscribers())
     }
 
-# ========== ПИНГ ДЛЯ ПРОБУЖДЕНИЯ (КАЖДЫЕ 4 МИНУТЫ) ==========
+# ========== ПИНГ ДЛЯ ПРОБУЖДЕНИЯ ==========
 def keep_alive():
     """Пинг самого себя чтобы Render не засыпал"""
     url = "https://zayavki-bot-xquz.onrender.com/"
