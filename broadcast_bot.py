@@ -6,8 +6,8 @@ from flask import Flask, request
 from datetime import datetime
 
 # ========== НАСТРОЙКИ - ЗАМЕНИ НА СВОИ! ==========
-BOT_TOKEN = "7711924273:AAEUxHrR0sYf-MGiK4T-f3H_v0ktPqQ5Re8"  # ЗАМЕНИ!
-ADMIN_ID = "702075185"  # ЗАМЕНИ!
+BOT_TOKEN = "8602377968:AAFYIH_d7KDZBuW4yaQIkePga7uEQC87eSA"  # ЗАМЕНИ!
+ADMIN_ID = "732672980"  # ЗАМЕНИ!
 # =================================================
 
 SUBSCRIBERS_FILE = "subscribers.json"
