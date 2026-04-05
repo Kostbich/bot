@@ -57,7 +57,22 @@ LANDINGS = {
 📱 Источник: {data.get('source', 'DST Teens Landing')}
 
 ⏰ Время: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}"""
+
+"cs2-esports": {
+    "name": "DST Esports (киберспорт 16-21)",
+    "emoji": "🚀",
+    "admin_chat_id": ADMIN_ID,
+    "format_message": lambda data: f"""🚀 <b>НОВАЯ ЗАЯВКА - DST ESPORTS!</b>
+
+👤 Никнейм: {data.get('name', '-')}
+📞 Телефон: {data.get('phone', '-')}
+📱 Telegram: {data.get('telegram', 'не указан')}
+🎮 Текущий уровень: {data.get('current_rank', '-')}
+🎯 Роль: {data.get('role', '-')}
+
+⏰ Время: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}"""
 }
+
 }
 
 
