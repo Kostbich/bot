@@ -39,30 +39,30 @@ LANDINGS = {
 👤 Имя: {data.get('name', '-')}
 📞 Телефон: {data.get('phone', '-')}
 📱 Telegram: {data.get('telegram', 'не указан')}
-🎮 Ранг: {data.get('rank', '-')}
+🎮 FaceIt уровень: {data.get('faceit', '-')}
+🏆 Premier рейтинг: {data.get('premier', '-')}
 
 ⏰ Время: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}"""
     },
- "cs2-teens": {
-    "name": "DST Academy (подростки 16-21)",
-    "emoji": "⚡",
-    "admin_chat_id": ADMIN_ID,
-    "format_message": lambda data: f"""⚡ <b>НОВАЯ ЗАЯВКА - DST ACADEMY TEENS!</b>
+    "cs2-teens": {
+        "name": "DST Academy (подростки 16-21)",
+        "emoji": "⚡",
+        "admin_chat_id": ADMIN_ID,
+        "format_message": lambda data: f"""⚡ <b>НОВАЯ ЗАЯВКА - DST ACADEMY TEENS!</b>
 
 👤 Никнейм: {data.get('name', '-')}
 📞 Телефон: {data.get('phone', '-')}
 📱 Telegram: {data.get('telegram', 'не указан')}
 🎮 Текущий уровень: {data.get('current_rank', '-')}
 🎯 Целевой уровень: {data.get('target_rank', '-')}
-📱 Источник: {data.get('source', 'DST Teens Landing')}
 
 ⏰ Время: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}"""
- },
- "cs2-esports": {
-    "name": "DST Esports (киберспорт 16-21)",
-    "emoji": "🚀",
-    "admin_chat_id": ADMIN_ID,
-    "format_message": lambda data: f"""🚀 <b>НОВАЯ ЗАЯВКА - DST ESPORTS!</b>
+    },
+    "cs2-esports": {
+        "name": "DST Esports (киберспорт 16-21)",
+        "emoji": "🚀",
+        "admin_chat_id": ADMIN_ID,
+        "format_message": lambda data: f"""🚀 <b>НОВАЯ ЗАЯВКА - DST ESPORTS!</b>
 
 👤 Никнейм: {data.get('name', '-')}
 📞 Телефон: {data.get('phone', '-')}
@@ -71,11 +71,12 @@ LANDINGS = {
 🎯 Роль: {data.get('role', '-')}
 
 ⏰ Время: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}"""
- };
+    }
+}
 
-# ========== FLASK ПРИЛОЖЕНИЕ (СОЗДАЁМ РАНЬШЕ ВСЕГО) ==========
+# ========== FLASK ПРИЛОЖЕНИЕ ==========
 app = Flask(__name__)
-CORS(app)  # Разрешаем запросы с любых доменов
+CORS(app)
 
 # ========== РАБОТА С ПОДПИСЧИКАМИ ==========
 def load_subscribers():
@@ -126,14 +127,12 @@ def get_subscribers_by_topic(topic):
     return [s["id"] for s in subs if "all" in s["topics"] or topic in s["topics"]]
 
 def broadcast_to_all(message, topic=None, exclude_admin=False):
-    """Отправляет сообщение всем подписчикам, опционально исключая админа"""
     if topic:
         user_ids = get_subscribers_by_topic(topic)
     else:
         subs = load_subscribers()
         user_ids = [s["id"] for s in subs]
     
-    # Исключаем админа если нужно
     if exclude_admin:
         user_ids = [uid for uid in user_ids if str(uid) != str(ADMIN_ID)]
     
@@ -149,7 +148,6 @@ def broadcast_to_all(message, topic=None, exclude_admin=False):
     return success
 
 def send_message(chat_id, text, parse_mode="HTML"):
-    """Отправляет сообщение конкретному пользователю"""
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     try:
         response = requests.post(url, json={
@@ -163,14 +161,13 @@ def send_message(chat_id, text, parse_mode="HTML"):
         return False
 
 def send_new_lead_notification(landing_key, lead_data):
-    """Отправляет заявку: админу 1 раз, остальным подписчикам"""
     landing = LANDINGS.get(landing_key)
     if not landing:
         return False
     
     message = landing["format_message"](lead_data)
     
-    # 1. Отправляем админу (только один раз!)
+    # Отправляем админу
     admin_msg = f"""{landing['emoji']} <b>НОВАЯ ЗАЯВКА!</b>
 
 <b>Проект:</b> {landing['name']}
@@ -182,12 +179,12 @@ def send_new_lead_notification(landing_key, lead_data):
     except Exception as e:
         print(f"❌ Ошибка отправки админу: {e}")
     
-    # 2. Рассылаем всем подписчикам (КРОМЕ АДМИНА, чтобы не было дубля)
+    # Рассылаем подписчикам (исключая админа)
     result = broadcast_to_all(message, topic=landing_key, exclude_admin=True)
-    print(f"📢 Разослано {result} подписчикам (админ исключён)")
+    print(f"📢 Разослано {result} подписчикам")
     return True
 
-# ========== ВЕБХУК ДЛЯ TELEGRAM (КОМАНДЫ) ==========
+# ========== ВЕБХУК ДЛЯ TELEGRAM ==========
 @app.route('/webhook/telegram', methods=['POST'])
 def telegram_webhook():
     update = request.json
@@ -203,38 +200,23 @@ def telegram_webhook():
         
         if text == '/start':
             save_subscriber(chat_id, ["all"])
-            welcome_msg = f"""🎯 <b>Добро пожаловать в CS2 Academy!</b>
+            topics_list = "\n".join([f"• {key} — {LANDINGS[key]['name']}" for key in LANDINGS.keys()])
+            welcome_msg = f"""🚀 <b>Добро пожаловать в рассылку DST Academy!</b>
 
 Привет, {first_name}!
 
-✅ Вы подписаны на уведомления о новых заявках.
-
-<b>Доступные команды:</b>
-/subscribe [тема] - подписаться
-/unsubscribe [тема] - отписаться
-/my_topics - мои подписки
-/help - помощь
-
-<i>Пример: /subscribe cs2-kids</i>"""
-            send_message(chat_id, welcome_msg)
-        
-        elif text == '/help':
-            help_msg = """📖 <b>Помощь по боту</b>
-
-<b>Доступные темы:</b>
-• cs2-kids - CS2 Академия (дети 12-16)
-• cs2-adults - DST Academy (мужчины 30+)
-• all - все новости
+📢 <b>Доступные темы для подписки:</b>
+{topics_list}
+• all — все новости
 
 <b>Команды:</b>
-/subscribe cs2-kids - подписаться
-/subscribe cs2-adults - подписаться
-/subscribe all - подписаться на всё
-/unsubscribe cs2-kids - отписаться
-/my_topics - мои подписки
-/start - начать
-/help - помощь"""
-            send_message(chat_id, help_msg)
+/subscribe [тема] — подписаться
+/unsubscribe [тема] — отписаться
+/my_topics — мои подписки
+/help — помощь
+
+<i>Пример: /subscribe cs2-esports</i>"""
+            send_message(chat_id, welcome_msg)
         
         elif text.startswith('/subscribe'):
             parts = text.split()
@@ -244,9 +226,9 @@ def telegram_webhook():
                     save_subscriber(chat_id, [topic])
                     send_message(chat_id, f"✅ Вы подписались на тему: {topic}")
                 else:
-                    send_message(chat_id, f"❌ Неизвестная тема. Доступно: cs2-kids, cs2-adults, all")
+                    send_message(chat_id, f"❌ Неизвестная тема. Доступно: {', '.join(LANDINGS.keys())}, all")
             else:
-                send_message(chat_id, "❌ Укажите тему\nПример: /subscribe cs2-kids")
+                send_message(chat_id, "❌ Укажите тему\nПример: /subscribe cs2-esports")
         
         elif text.startswith('/unsubscribe'):
             parts = text.split()
@@ -257,7 +239,7 @@ def telegram_webhook():
                 else:
                     send_message(chat_id, f"⚠️ Вы не были подписаны на {topic}")
             else:
-                send_message(chat_id, "❌ Укажите тему\nПример: /unsubscribe cs2-kids")
+                send_message(chat_id, "❌ Укажите тему\nПример: /unsubscribe cs2-esports")
         
         elif text == '/my_topics':
             subs = load_subscribers()
@@ -266,20 +248,34 @@ def telegram_webhook():
                 topics_list = "\n".join([f"• {t}" for t in user["topics"]])
                 send_message(chat_id, f"📋 <b>Ваши подписки:</b>\n{topics_list}")
             else:
-                send_message(chat_id, "📋 У вас нет активных подписок.\nИспользуйте /subscribe [тема]")
+                send_message(chat_id, "📋 У вас нет активных подписок. Используйте /subscribe [тема]")
+        
+        elif text == '/help':
+            topics_list = "\n".join([f"• {key} — {LANDINGS[key]['name']}" for key in LANDINGS.keys()])
+            help_msg = f"""📖 <b>Помощь по боту</b>
+
+<b>Доступные темы:</b>
+{topics_list}
+• all — все новости
+
+<b>Команды:</b>
+/subscribe [тема] — подписаться
+/unsubscribe [тема] — отписаться
+/my_topics — мои подписки
+/start — начать
+/help — эта справка
+
+📞 По вопросам: @dst_academy"""
+            send_message(chat_id, help_msg)
         
         elif text == '/stats' and str(chat_id) == ADMIN_ID:
             subs = load_subscribers()
-            stats = f"📊 <b>Статистика</b>\n\nВсего подписчиков: {len(subs)}"
+            stats = f"📊 <b>Статистика бота</b>\n\nВсего подписчиков: {len(subs)}\n\nПо темам:\n"
             for key in LANDINGS:
                 count = len(get_subscribers_by_topic(key))
-                stats += f"\n• {key}: {count}"
-            stats += f"\n• all: {len(get_subscribers_by_topic('all'))}"
+                stats += f"• {key}: {count}\n"
+            stats += f"• all: {len(get_subscribers_by_topic('all'))}"
             send_message(chat_id, stats)
-        
-        else:
-            if not text.startswith('/'):
-                send_message(chat_id, "❓ Неизвестная команда. Напишите /help")
     
     return {"ok": True}
 
@@ -318,10 +314,9 @@ def index():
 
 # ========== ПИНГ ДЛЯ ПРОБУЖДЕНИЯ ==========
 def keep_alive():
-    """Пинг самого себя чтобы Render не засыпал"""
     url = "https://zayavki-bot-xquz.onrender.com/"
     while True:
-        time.sleep(240)  # 4 минуты
+        time.sleep(240)
         try:
             response = requests.get(url, timeout=10)
             print(f"💓 Пинг отправлен. Статус: {response.status_code}")
@@ -330,10 +325,8 @@ def keep_alive():
 
 # ========== ЗАПУСК ==========
 if __name__ == "__main__":
-    # Устанавливаем webhook
     set_telegram_webhook()
     
-    # Запускаем пингер в отдельном потоке
     ping_thread = threading.Thread(target=keep_alive, daemon=True)
     ping_thread.start()
     print("💓 Пингер запущен (каждые 4 минуты)")
