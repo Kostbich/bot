@@ -2,6 +2,7 @@ import requests
 import json
 import os
 import time
+import threading
 from flask import Flask, request
 from datetime import datetime
 from flask_cors import CORS
@@ -92,12 +93,17 @@ def get_subscribers_by_topic(topic):
     subs = load_subscribers()
     return [s["id"] for s in subs if "all" in s["topics"] or topic in s["topics"]]
 
-def broadcast_to_all(message, topic=None):
+def broadcast_to_all(message, topic=None, exclude_admin=False):
+    """Отправляет сообщение всем подписчикам, опционально исключая админа"""
     if topic:
         user_ids = get_subscribers_by_topic(topic)
     else:
         subs = load_subscribers()
         user_ids = [s["id"] for s in subs]
+    
+    # Исключаем админа если нужно
+    if exclude_admin:
+        user_ids = [uid for uid in user_ids if str(uid) != str(ADMIN_ID)]
     
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     success = 0
@@ -110,33 +116,8 @@ def broadcast_to_all(message, topic=None):
         time.sleep(0.05)
     return success
 
-def send_new_lead_notification(landing_key, lead_data):
-    landing = LANDINGS.get(landing_key)
-    if not landing:
-        return False
-    
-    message = landing["format_message"](lead_data)
-    
-    # Админу
-    admin_msg = f"""{landing['emoji']} <b>НОВАЯ ЗАЯВКА!</b>
-
-<b>Проект:</b> {landing['name']}
-{message}"""
-    
-    try:
-        requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-                     json={"chat_id": landing["admin_chat_id"], "text": admin_msg, "parse_mode": "HTML"}, timeout=10)
-        print(f"✅ Отправлено админу {landing['admin_chat_id']}")
-    except Exception as e:
-        print(f"❌ Ошибка отправки админу: {e}")
-    
-    # Рассылка всем подписанным
-    result = broadcast_to_all(message, topic=landing_key)
-    print(f"📢 Разослано {result} подписчикам")
-    return True
-
-# ========== ОТПРАВКА СООБЩЕНИЯ ==========
 def send_message(chat_id, text, parse_mode="HTML"):
+    """Отправляет сообщение конкретному пользователю"""
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     try:
         response = requests.post(url, json={
@@ -149,16 +130,36 @@ def send_message(chat_id, text, parse_mode="HTML"):
         print(f"Ошибка отправки {chat_id}: {e}")
         return False
 
-# ========== FLASK ПРИЛОЖЕНИЕ ==========
-app = Flask(__name__)
-CORS(app)
+def send_new_lead_notification(landing_key, lead_data):
+    """Отправляет заявку: админу 1 раз, остальным подписчикам"""
+    landing = LANDINGS.get(landing_key)
+    if not landing:
+        return False
+    
+    message = landing["format_message"](lead_data)
+    
+    # 1. Отправляем админу (только один раз!)
+    admin_msg = f"""{landing['emoji']} <b>НОВАЯ ЗАЯВКА!</b>
 
-# ========== ВЕБХУК ДЛЯ TELEGRAM (ПРИНИМАЕТ КОМАНДЫ) ==========
+<b>Проект:</b> {landing['name']}
+{message}"""
+    
+    try:
+        send_message(landing["admin_chat_id"], admin_msg)
+        print(f"✅ Отправлено админу {landing['admin_chat_id']}")
+    except Exception as e:
+        print(f"❌ Ошибка отправки админу: {e}")
+    
+    # 2. Рассылаем всем подписчикам (КРОМЕ АДМИНА, чтобы не было дубля)
+    result = broadcast_to_all(message, topic=landing_key, exclude_admin=True)
+    print(f"📢 Разослано {result} подписчикам (админ исключён)")
+    return True
+
+# ========== ВЕБХУК ДЛЯ TELEGRAM (КОМАНДЫ) ==========
 @app.route('/webhook/telegram', methods=['POST'])
 def telegram_webhook():
-    """Telegram отправляет сюда все сообщения от пользователей"""
     update = request.json
-    print(f"📨 Получено от Telegram: {update}")
+    print(f"📨 Telegram update: {update}")
     
     if 'message' in update:
         chat_id = update['message']['chat']['id']
@@ -168,7 +169,6 @@ def telegram_webhook():
         
         print(f"📩 Сообщение от @{username} ({chat_id}): {text}")
         
-        # ===== ОБРАБОТКА КОМАНД =====
         if text == '/start':
             save_subscriber(chat_id, ["all"])
             welcome_msg = f"""🎯 <b>Добро пожаловать в CS2 Academy!</b>
@@ -178,14 +178,13 @@ def telegram_webhook():
 ✅ Вы подписаны на уведомления о новых заявках.
 
 <b>Доступные команды:</b>
-/subscribe [тема] - подписаться на тему
+/subscribe [тема] - подписаться
 /unsubscribe [тема] - отписаться
 /my_topics - мои подписки
 /help - помощь
 
 <i>Пример: /subscribe cs2-kids</i>"""
             send_message(chat_id, welcome_msg)
-            print(f"✅ Отправлено приветствие {chat_id}")
         
         elif text == '/help':
             help_msg = """📖 <b>Помощь по боту</b>
@@ -196,13 +195,13 @@ def telegram_webhook():
 • all - все новости
 
 <b>Команды:</b>
-/subscribe cs2-kids - подписаться на детей
-/subscribe cs2-adults - подписаться на взрослых
+/subscribe cs2-kids - подписаться
+/subscribe cs2-adults - подписаться
 /subscribe all - подписаться на всё
 /unsubscribe cs2-kids - отписаться
 /my_topics - мои подписки
-/start - начать заново
-/help - эта справка"""
+/start - начать
+/help - помощь"""
             send_message(chat_id, help_msg)
         
         elif text.startswith('/subscribe'):
@@ -212,9 +211,8 @@ def telegram_webhook():
                 if topic in LANDINGS or topic == "all":
                     save_subscriber(chat_id, [topic])
                     send_message(chat_id, f"✅ Вы подписались на тему: {topic}")
-                    print(f"📌 Подписал {chat_id} на {topic}")
                 else:
-                    send_message(chat_id, f"❌ Неизвестная тема: {topic}\nДоступно: cs2-kids, cs2-adults, all")
+                    send_message(chat_id, f"❌ Неизвестная тема. Доступно: cs2-kids, cs2-adults, all")
             else:
                 send_message(chat_id, "❌ Укажите тему\nПример: /subscribe cs2-kids")
         
@@ -248,39 +246,35 @@ def telegram_webhook():
             send_message(chat_id, stats)
         
         else:
-            # Неизвестная команда
             if not text.startswith('/'):
-                send_message(chat_id, "❓ Неизвестная команда. Напишите /help для списка команд")
+                send_message(chat_id, "❓ Неизвестная команда. Напишите /help")
     
     return {"ok": True}
 
 # ========== ВЕБХУК ДЛЯ ЛЕНДИНГОВ ==========
 @app.route('/webhook/<landing_key>', methods=['POST'])
 def webhook_landing(landing_key):
-    """Принимает заявки с лендингов"""
-    print(f"📨 Webhook лендинга: {landing_key}")
-    
     if landing_key not in LANDINGS:
         return {"status": "error"}, 404
     
     try:
         data = request.json
-        print(f"📨 Данные: {data}")
+        print(f"📨 Заявка с {landing_key}: {data}")
         send_new_lead_notification(landing_key, data)
         return {"status": "ok"}, 200
     except Exception as e:
         print(f"❌ Ошибка: {e}")
         return {"status": "error"}, 500
 
-# ========== УСТАНОВКА WEBHOOK ДЛЯ TELEGRAM ==========
+# ========== УСТАНОВКА WEBHOOK ==========
 def set_telegram_webhook():
     webhook_url = "https://zayavki-bot-xquz.onrender.com/webhook/telegram"
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook"
     try:
         response = requests.post(url, json={"url": webhook_url})
-        print(f"📢 Telegram webhook: {response.json()}")
+        print(f"📢 Webhook установлен: {response.json()}")
     except Exception as e:
-        print(f"❌ Ошибка установки webhook: {e}")
+        print(f"❌ Ошибка: {e}")
 
 @app.route('/')
 def index():
@@ -290,25 +284,27 @@ def index():
         "subscribers": len(load_subscribers())
     }
 
-# ========== ПИНГ ДЛЯ ПРОБУЖДЕНИЯ ==========
+# ========== ПИНГ ДЛЯ ПРОБУЖДЕНИЯ (КАЖДЫЕ 4 МИНУТЫ) ==========
 def keep_alive():
+    """Пинг самого себя чтобы Render не засыпал"""
+    url = "https://zayavki-bot-xquz.onrender.com/"
     while True:
-        time.sleep(240)
+        time.sleep(240)  # 4 минуты
         try:
-            requests.get('https://zayavki-bot-xquz.onrender.com/')
-            print("💓 Пинг")
-        except:
-            pass
+            response = requests.get(url, timeout=10)
+            print(f"💓 Пинг отправлен. Статус: {response.status_code}")
+        except Exception as e:
+            print(f"❌ Ошибка пинга: {e}")
 
 # ========== ЗАПУСК ==========
 if __name__ == "__main__":
-    import threading
-    
-    # Устанавливаем webhook для Telegram
+    # Устанавливаем webhook
     set_telegram_webhook()
     
-    # Запускаем пингер
-    threading.Thread(target=keep_alive, daemon=True).start()
+    # Запускаем пингер в отдельном потоке
+    ping_thread = threading.Thread(target=keep_alive, daemon=True)
+    ping_thread.start()
+    print("💓 Пингер запущен (каждые 4 минуты)")
     
     port = int(os.environ.get('PORT', 5000))
     print(f"🚀 Бот запущен на порту {port}")
