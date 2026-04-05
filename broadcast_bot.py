@@ -57,8 +57,8 @@ LANDINGS = {
 📱 Источник: {data.get('source', 'DST Teens Landing')}
 
 ⏰ Время: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}"""
-
-"cs2-esports": {
+ },
+ "cs2-esports": {
     "name": "DST Esports (киберспорт 16-21)",
     "emoji": "🚀",
     "admin_chat_id": ADMIN_ID,
@@ -71,10 +71,7 @@ LANDINGS = {
 🎯 Роль: {data.get('role', '-')}
 
 ⏰ Время: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}"""
-}
-
-}
-
+ };
 
 # ========== FLASK ПРИЛОЖЕНИЕ (СОЗДАЁМ РАНЬШЕ ВСЕГО) ==========
 app = Flask(__name__)
