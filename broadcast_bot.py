@@ -71,7 +71,21 @@ LANDINGS = {
 🎯 Роль: {data.get('role', '-')}
 
 ⏰ Время: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}"""
-    }
+    },
+    "cs2-business": {
+        "name": "DST Business (B2B корпоративный)",
+        "emoji": "💼",
+        "admin_chat_id": ADMIN_ID,
+        "format_message": lambda data: f"""💼 <b>НОВАЯ ЗАЯВКА - DST BUSINESS!</b>
+
+🏢 Компания: {data.get('company', '-')}
+👤 Контакт: {data.get('name', '-')}
+📞 Телефон: {data.get('phone', '-')}
+📧 Email: {data.get('email', '-')}
+💬 Сообщение: {data.get('message', '-')}
+
+⏰ Время: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}"""
+    },
 }
 
 # ========== FLASK ПРИЛОЖЕНИЕ ==========
