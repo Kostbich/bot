@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: cs2-academy-bot
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python broadcast_bot.py
+    envVars:
+      - key: BOT_TOKEN
+        value: 8602377968:AAFYIH_d7KDZBuW4yaQIkePga7uEQC87eSA
+      - key: ADMIN_ID
+        value: 732672980
